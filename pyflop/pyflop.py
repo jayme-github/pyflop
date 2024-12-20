@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
+import argparse
 import glob
 import subprocess
-from typing import Iterable
+import sys
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from ipaddress import IPv4Address
-from contextlib import contextmanager
-import argparse
-
+from typing import Iterable
 
 FIRST_IP = IPv4Address("10.10.0.1")
 SCHEME_MAP = {80: "http://", 443: "https://", 5900: "vnc://", 3389: "rdp://"}
@@ -62,6 +62,24 @@ class Interface:
         finally:
             subprocess.run(f"sudo ip link del {self.name}", shell=True)
 
+    @contextmanager
+    def create_hosts_entry(self, remote_hosts: Iterable[str]):
+        # Create a new entry in /etc/hosts for the remote host on this interface ip
+        # Need to capture the output as hostsed does always print the full /etc/hosts contents
+        try:
+            subprocess.run(
+                f"sudo {sys.executable} -m hosts.editor add {self.ipv4} {' '.join(remote_hosts)}",
+                shell=True, capture_output=True
+            )
+            yield self
+        finally:
+            # Explicitly delete the entries made above to avoid removing manual changes
+            for remote_host in remote_hosts:
+                subprocess.run(
+                    f"sudo {sys.executable} -m hosts.editor delete {self.ipv4} {remote_host}",
+                    shell=True, capture_output=True
+                )
+
 
 def create_tunnel(interface: Interface, tunnels: Iterable[Tunnel], remote: str):
     # Create a ssh new tunnel using the interface, local_port, remote_host, and remote_port
@@ -77,6 +95,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="SSH port forwarding using local dummy interfaces"
     )
+    parser.add_argument("--no-hosts", action="store_true", help="Do not modify /etc/hosts")
     tunnels_arg = parser.add_argument(
         "-L",
         dest="tunnels",
@@ -88,6 +107,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(dest="remote", help="Remote host")
 
     args = parser.parse_args()
+    args.modify_hosts = not args.no_hosts
 
     tunnels = []
     for tunnel_str in args.tunnels:
@@ -119,13 +139,16 @@ def main():
     args = parse_arguments()
 
     with Interface().create_interface() as interface:
+        remote_hosts = set()
         for tunnel in args.tunnels:
+            remote_hosts.add(tunnel.remote_host)
             scheme = SCHEME_MAP.get(tunnel.local_port, "")
             print(
                 f"Tunnel created: {scheme}{interface.ipv4}:{tunnel.local_port}"
                 f" -> {tunnel.remote_host}:{tunnel.remote_port}"
             )
-        create_tunnel(interface, args.tunnels, args.remote)
+        with interface.create_hosts_entry(remote_hosts) if args.modify_hosts else nullcontext():
+            create_tunnel(interface, args.tunnels, args.remote)
 
 
 if __name__ == "__main__":

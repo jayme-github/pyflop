@@ -1,9 +1,11 @@
-import unittest
-from unittest.mock import patch, call
-from ipaddress import IPv4Address
 import subprocess
-from pyflop.pyflop import Tunnel, Interface, create_tunnel, parse_arguments
+import sys
+import unittest
 from argparse import ArgumentError
+from ipaddress import IPv4Address
+from unittest.mock import call, patch
+
+from pyflop.pyflop import Interface, Tunnel, create_tunnel, parse_arguments
 
 
 def mock_run_side_effect(cmd, *args, **kwargs):
@@ -42,6 +44,32 @@ class TestInterface(unittest.TestCase):
             ),
             call(f"sudo ip link set {interface.name} up", shell=True),
             call(f"sudo ip link del {interface.name}", shell=True),
+        ]
+        self.assertEqual(mock_run.call_args_list, expected_call_args)
+
+    @patch("subprocess.run", side_effect=mock_run_side_effect)
+    def test_create_hosts_entry(self, mock_run, mock_glob):
+        interface = Interface()
+        with interface.create_hosts_entry(("n0.pyflop.com", "n1.pyflop.com")) as created_interface:
+            self.assertEqual(created_interface, interface)
+
+        mock_run.call_count = 3
+        expected_call_args = [
+            call(
+                f"sudo {sys.executable} -m hosts.editor add {interface.ipv4} n0.pyflop.com n1.pyflop.com",
+                shell=True,
+                capture_output=True,
+            ),
+            call(
+                f"sudo {sys.executable} -m hosts.editor delete {interface.ipv4} n0.pyflop.com",
+                shell=True,
+                capture_output=True,
+            ),
+            call(
+                f"sudo {sys.executable} -m hosts.editor delete {interface.ipv4} n1.pyflop.com",
+                shell=True,
+                capture_output=True,
+            ),
         ]
         self.assertEqual(mock_run.call_args_list, expected_call_args)
 
