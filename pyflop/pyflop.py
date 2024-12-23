@@ -69,7 +69,8 @@ class Interface:
         try:
             subprocess.run(
                 f"sudo {sys.executable} -m hosts.editor add {self.ipv4} {' '.join(remote_hosts)}",
-                shell=True, capture_output=True
+                shell=True,
+                capture_output=True,
             )
             yield self
         finally:
@@ -77,7 +78,8 @@ class Interface:
             for remote_host in remote_hosts:
                 subprocess.run(
                     f"sudo {sys.executable} -m hosts.editor delete {self.ipv4} {remote_host}",
-                    shell=True, capture_output=True
+                    shell=True,
+                    capture_output=True,
                 )
 
 
@@ -95,7 +97,9 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="SSH port forwarding using local dummy interfaces"
     )
-    parser.add_argument("--no-hosts", action="store_true", help="Do not modify /etc/hosts")
+    parser.add_argument(
+        "--no-hosts", action="store_true", help="Do not modify /etc/hosts"
+    )
     tunnels_arg = parser.add_argument(
         "-L",
         dest="tunnels",
@@ -143,11 +147,16 @@ def main():
         for tunnel in args.tunnels:
             remote_hosts.add(tunnel.remote_host)
             scheme = SCHEME_MAP.get(tunnel.local_port, "")
+            remote_host = tunnel.remote_host if args.modify_hosts else interface.ipv4
             print(
-                f"Tunnel created: {scheme}{interface.ipv4}:{tunnel.local_port}"
+                f"Tunnel created: {scheme}{remote_host}:{tunnel.local_port}"
                 f" -> {tunnel.remote_host}:{tunnel.remote_port}"
             )
-        with interface.create_hosts_entry(remote_hosts) if args.modify_hosts else nullcontext():
+        with (
+            interface.create_hosts_entry(remote_hosts)
+            if args.modify_hosts
+            else nullcontext()
+        ):
             create_tunnel(interface, args.tunnels, args.remote)
 
 
