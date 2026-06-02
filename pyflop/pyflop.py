@@ -67,20 +67,29 @@ class Interface:
         # Create a new entry in /etc/hosts for the remote host on this interface ip
         # Need to capture the output as hostsed does always print the full /etc/hosts contents
         try:
-            subprocess.run(
-                f"sudo {sys.executable} -m hosts.editor add {self.ipv4} {' '.join(remote_hosts)}",
+            hostsed = subprocess.run(
+                f"sudo {sys.executable} -m hostsed.editor add {self.ipv4} {' '.join(remote_hosts)}",
                 shell=True,
                 capture_output=True,
             )
+            if hostsed.returncode != 0:
+                raise RuntimeError(
+                    f"Failed to modify /etc/hosts: {hostsed.stderr.decode()}"
+                )
             yield self
         finally:
             # Explicitly delete the entries made above to avoid removing manual changes
             for remote_host in remote_hosts:
-                subprocess.run(
-                    f"sudo {sys.executable} -m hosts.editor delete {self.ipv4} {remote_host}",
+                hostset = subprocess.run(
+                    f"sudo {sys.executable} -m hostsed.editor delete {self.ipv4} {remote_host}",
                     shell=True,
                     capture_output=True,
                 )
+                if hostset.returncode != 0:
+                    print(
+                        f"Warning: Failed to remove /etc/hosts entry for {remote_host}: {hostset.stderr.decode()}",
+                        file=sys.stderr,
+                    )
 
 
 def create_tunnel(interface: Interface, tunnels: Iterable[Tunnel], remote: str):

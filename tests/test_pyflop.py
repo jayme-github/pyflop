@@ -50,23 +50,25 @@ class TestInterface(unittest.TestCase):
     @patch("subprocess.run", side_effect=mock_run_side_effect)
     def test_create_hosts_entry(self, mock_run, mock_glob):
         interface = Interface()
-        with interface.create_hosts_entry(("n0.pyflop.com", "n1.pyflop.com")) as created_interface:
+        with interface.create_hosts_entry(
+            ("n0.pyflop.com", "n1.pyflop.com")
+        ) as created_interface:
             self.assertEqual(created_interface, interface)
 
         mock_run.call_count = 3
         expected_call_args = [
             call(
-                f"sudo {sys.executable} -m hosts.editor add {interface.ipv4} n0.pyflop.com n1.pyflop.com",
+                f"sudo {sys.executable} -m hostsed.editor add {interface.ipv4} n0.pyflop.com n1.pyflop.com",
                 shell=True,
                 capture_output=True,
             ),
             call(
-                f"sudo {sys.executable} -m hosts.editor delete {interface.ipv4} n0.pyflop.com",
+                f"sudo {sys.executable} -m hostsed.editor delete {interface.ipv4} n0.pyflop.com",
                 shell=True,
                 capture_output=True,
             ),
             call(
-                f"sudo {sys.executable} -m hosts.editor delete {interface.ipv4} n1.pyflop.com",
+                f"sudo {sys.executable} -m hostsed.editor delete {interface.ipv4} n1.pyflop.com",
                 shell=True,
                 capture_output=True,
             ),
